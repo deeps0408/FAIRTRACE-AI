@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Connection Test
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // Helper Functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // 1. Dataset Security
+    match /datasets/{datasetId} {
+      function isValidDataset(data) {
+        return data.keys().hasAll(['name', 'size', 'columns', 'userId', 'createdAt']) &&
+               data.keys().size() == 5 &&
+               data.name is string && data.name.size() <= 256 &&
+               data.size is number &&
+               data.columns is list &&
+               data.userId == request.auth.uid &&
+               data.createdAt == request.time;
+      }
+
+      allow get: if isSignedIn() && isOwner(resource.data.userId);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isSignedIn() && 
+                      isValidId(datasetId) && 
+                      isValidDataset(request.resource.data);
+                      
+      allow delete: if isSignedIn() && isOwner(resource.data.userId);
+      
+      // Datasets are mostly immutable after creation for audit purposes
+      allow update: if false;
+
+      // 2. Analysis Security (Nested)
+      match /analysis/{analysisId} {
+        function isValidAnalysis(data) {
+          return data.keys().hasAll(['datasetId', 'userId', 'createdAt', 'disparate_impact', 'demographic_parity', 'fairness_status', 'targetAttr', 'sensitiveAttr', 'privilegedValue', 'group_rates']) &&
+                 data.datasetId == datasetId &&
+                 data.userId == request.auth.uid &&
+                 data.createdAt == request.time &&
+                 data.disparate_impact is number &&
+                 data.demographic_parity is number &&
+                 data.fairness_status is string;
+        }
+
+        function parentDatasetOwnedByUser() {
+          return get(/databases/$(database)/documents/datasets/$(datasetId)).data.userId == request.auth.uid;
+        }
+
+        allow get: if isSignedIn() && isOwner(resource.data.userId);
+        allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+        
+        allow create: if isSignedIn() && 
+                        parentDatasetOwnedByUser() &&
+                        isValidAnalysis(request.resource.data);
+                        
+        allow update: if isSignedIn() && isOwner(resource.data.userId) &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aiReport']) &&
+                        request.resource.data.aiReport is string &&
+                        request.resource.data.aiReport.size() <= 10000;
+
+        allow delete: if false; // Audit logs should be immutable
+      }
+    }
+  }
+}

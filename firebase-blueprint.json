@@ -1,0 +1,56 @@
+{
+  "entities": {
+    "Dataset": {
+      "title": "Dataset Metadata",
+      "description": "Metadata about an uploaded and processed dataset.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "size": { "type": "number" },
+        "columns": { "type": "array", "items": { "type": "string" } },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "size", "userId", "createdAt"]
+    },
+    "Analysis": {
+      "title": "Bias Analysis Result",
+      "description": "Fairness metrics and AI report for a dataset.",
+      "type": "object",
+      "properties": {
+        "datasetId": { "type": "string" },
+        "sensitiveAttr": { "type": "string" },
+        "targetAttr": { "type": "string" },
+        "privilegedValue": { "type": "string" },
+        "disparate_impact": { "type": "number" },
+        "demographic_parity": { "type": "number" },
+        "fairness_status": { "type": "string" },
+        "group_rates": { 
+          "type": "object",
+          "properties": {
+            "privileged": { "type": "number" },
+            "unprivileged": { "type": "number" }
+          }
+        },
+        "aiReport": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["datasetId", "userId", "createdAt", "disparate_impact", "demographic_parity"]
+    }
+  },
+  "firestore": {
+    "test/connection": {
+      "schema": { "type": "object", "properties": {} },
+      "description": "Dummy document used for testing Firestore connectivity"
+    },
+    "datasets/{datasetId}": {
+      "schema": "Dataset",
+      "description": "Uploaded dataset information"
+    },
+    "datasets/{datasetId}/analysis/{analysisId}": {
+      "schema": "Analysis",
+      "description": "Specific analysis runs for a dataset"
+    }
+  }
+}
